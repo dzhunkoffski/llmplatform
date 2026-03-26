@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s # Как часто опрашивать сервисы (для тестов ставим часто)
+
+scrape_configs:
+  - job_name: 'llm_balancer'
+    # Указываем порт 9464, который мы открыли в metrics.py
+    static_configs:
+      - targets: ['balancer:9464']
