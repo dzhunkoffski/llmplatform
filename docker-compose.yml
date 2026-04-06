@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - llm_network
+
   balancer:
     build: .
     container_name: llm_balancer
@@ -11,6 +27,8 @@ services:
       provider-1:
         condition: service_healthy # Ждем, пока провайдер станет здоров
       provider-2:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     # ДОБАВЛЯЕМ HEALTHCHECK
     healthcheck:
@@ -100,6 +118,7 @@ services:
 
 volumes:
   ollama_data:
+  redis_data:
 
     # Явно определяем сеть, чтобы контейнеры видели друг друга по именам
 networks:

@@ -6,3 +6,4 @@ opentelemetry-sdk
 opentelemetry-instrumentation-fastapi
 opentelemetry-exporter-prometheus
 psutil
+redis[hiredis]
