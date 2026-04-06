@@ -23,6 +23,8 @@ services:
     ports:
       - "8000:8000"
       # Порт метрик наружу пробрасывать не обязательно, Prometheus внутри сети Docker
+    environment:
+      - ADMIN_KEY=${ADMIN_KEY}
     depends_on:
       provider-1:
         condition: service_healthy # Ждем, пока провайдер станет здоров

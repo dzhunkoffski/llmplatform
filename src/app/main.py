@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.routes import router
 from app.api.registry_routes import registry_router
+from app.api.provider_routes import provider_router
 from app.monitoring.metrics import setup_metrics
 from app.services.registry import registry
+from app.services.provider_registry import provider_registry
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -19,11 +21,13 @@ logging.basicConfig(
 async def lifespan(_app: FastAPI):
     yield
     await registry.close()
+    await provider_registry.close()
 
 app = FastAPI(title="Agent Platform API Gateway", lifespan=lifespan)
 
 app.include_router(router)
 app.include_router(registry_router)
+app.include_router(provider_router)
 setup_metrics(app)
 
 @app.get("/health")
