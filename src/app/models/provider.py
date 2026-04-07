@@ -3,6 +3,20 @@ from pydantic import BaseModel, Field
 import uuid
 
 
+class ProviderHealthStatus(BaseModel):
+    """Runtime health snapshot for a single provider."""
+    id: str
+    name: str
+    url: str
+    circuit_state: str          # closed / open / half_open
+    avg_latency_ms: float       # EMA of time-to-first-token in milliseconds
+    total_requests: int
+    total_errors: int
+    consecutive_errors: int
+    last_failure_time: Optional[float] = None   # Unix timestamp
+    last_success_time: Optional[float] = None   # Unix timestamp
+
+
 class ProviderConfig(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
