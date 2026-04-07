@@ -5,7 +5,9 @@ from fastapi import FastAPI
 from app.api.routes import router
 from app.api.registry_routes import registry_router
 from app.api.provider_routes import provider_router
+from app.core.config import settings
 from app.monitoring.metrics import setup_metrics
+from app.monitoring.mlflow_tracker import init_mlflow
 from app.services.registry import registry
 from app.services.provider_registry import provider_registry
 
@@ -19,6 +21,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    init_mlflow(settings.MLFLOW_TRACKING_URI)
     yield
     await registry.close()
     await provider_registry.close()

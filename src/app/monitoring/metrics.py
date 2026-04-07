@@ -14,6 +14,8 @@ provider = MeterProvider(metric_readers=[reader])
 metrics.set_meter_provider(provider)
 meter = metrics.get_meter("llmplatform")
 
+# ── Existing request-level metrics ────────────────────────────────────────────
+
 REQUESTS_COUNTER = Counter(
     'llm_platform_requests_total',
     'Total number of requests to the platform',
@@ -32,6 +34,63 @@ CPU_USAGE = Gauge(
     'Current CPU usage of the balancer process in percent'
 )
 
+# ── LLM-specific metrics ──────────────────────────────────────────────────────
+
+LLM_TTFT = Histogram(
+    'llm_ttft_seconds',
+    'Time to first token (seconds) per provider',
+    ['provider'],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, float("inf"))
+)
+
+LLM_TPOT = Histogram(
+    'llm_tpot_milliseconds',
+    'Time per output token (milliseconds) per provider',
+    ['provider'],
+    buckets=(1, 5, 10, 25, 50, 100, 250, 500, 1000, float("inf"))
+)
+
+LLM_INPUT_TOKENS = Counter(
+    'llm_input_tokens_total',
+    'Cumulative input tokens processed per provider',
+    ['provider']
+)
+
+LLM_OUTPUT_TOKENS = Counter(
+    'llm_output_tokens_total',
+    'Cumulative output tokens generated per provider',
+    ['provider']
+)
+
+LLM_COST_USD = Counter(
+    'llm_request_cost_usd_total',
+    'Cumulative estimated request cost in USD per provider',
+    ['provider']
+)
+
+
+def record_llm_metrics(
+    provider_name: str,
+    ttft_s: float,
+    tpot_ms: float,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+) -> None:
+    """Record per-completion LLM metrics into Prometheus."""
+    LLM_TTFT.labels(provider=provider_name).observe(ttft_s)
+    if tpot_ms > 0:
+        LLM_TPOT.labels(provider=provider_name).observe(tpot_ms)
+    if input_tokens > 0:
+        LLM_INPUT_TOKENS.labels(provider=provider_name).inc(input_tokens)
+    if output_tokens > 0:
+        LLM_OUTPUT_TOKENS.labels(provider=provider_name).inc(output_tokens)
+    if cost_usd > 0:
+        LLM_COST_USD.labels(provider=provider_name).inc(cost_usd)
+
+
+# ── Middleware setup ──────────────────────────────────────────────────────────
+
 def setup_metrics(app: FastAPI):
     # [ ]: replace hardcoded port with config
     start_http_server(port=9464)
@@ -39,19 +98,15 @@ def setup_metrics(app: FastAPI):
 
     @app.middleware("http")
     async def monitor_requests(request: Request, call_next):
-        # Игнорируем health-checks и сами метрики, чтобы не засорять статистику
         if request.url.path in ["/health", "/metrics"]:
             return await call_next(request)
 
         method = request.method
         path = request.url.path
-        
-        # Начинаем отсчёт времени
+
         start_time = time.time()
-        
-        # Обновляем метрику CPU перед обработкой запроса
         CPU_USAGE.set(psutil.cpu_percent(interval=None))
-        
+
         try:
             response = await call_next(request)
             status_code = response.status_code
@@ -59,26 +114,20 @@ def setup_metrics(app: FastAPI):
             status_code = 500
             raise e
         finally:
-            # Запрос завершен. Вычисляем длительность.
             duration = time.time() - start_time
-            
-            # Получаем имя провайдера, которое Middleware routes.py положил в request.scope
-            # (нам нужно немного обновить routes.py, см. Шаг 3)
             provider_name = request.scope.get("chosen_provider", "unknown")
 
-            # Записываем метрики
             REQUESTS_COUNTER.labels(
-                method=method, 
-                path=path, 
-                status_code=status_code, 
+                method=method,
+                path=path,
+                status_code=status_code,
                 provider=provider_name
             ).inc()
-            
-            # Длительность пишем только для успешных или LLM-ошибок (4xx), не для падений прокси
+
             if status_code != 500:
                 REQUEST_DURATION.labels(
-                    method=method, 
-                    path=path, 
+                    method=method,
+                    path=path,
                     provider=provider_name
                 ).observe(duration)
 

@@ -5,6 +5,7 @@ import urllib.parse
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
+from app.core.config import settings
 from app.services.balancer import balancer
 from app.services.client import fetch_stream
 
@@ -38,6 +39,14 @@ async def balance_and_proxy(request: Request):
         )
 
     return StreamingResponse(
-        fetch_stream(provider.url, request_body, provider.api_key, provider_id=provider.id),
+        fetch_stream(
+            url=provider.url,
+            body=request_body,
+            api_key=provider.api_key,
+            provider_id=provider.id,
+            provider_name=provider_name,
+            token_price=provider.token_price,
+            mlflow_tracking_uri=settings.MLFLOW_TRACKING_URI,
+        ),
         media_type="text/event-stream",
     )
