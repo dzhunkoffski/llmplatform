@@ -14,15 +14,13 @@ Selection algorithm
 5. Among healthy providers, keep only the highest-priority group
    (lowest `priority` number).
 6. Within that group, pick the provider with the lowest latency EMA.
-   Providers with no latency data yet are assigned a random value in
-   [0.5, 1.5] s so that ties are broken randomly rather than always
-   favouring the first provider in the list.
+   Providers with no latency data yet are treated as having a neutral
+   placeholder latency (UNKNOWN_LATENCY) so they get a fair chance.
 7. If no providers are registered at all, fall back to the static list
    in settings.PROVIDERS (round-robin).
 """
 
 import logging
-import random
 
 from app.core.config import settings
 from app.models.provider import ProviderConfig
@@ -30,11 +28,9 @@ from app.models.provider import ProviderConfig
 logger = logging.getLogger(__name__)
 
 # Latency assigned to providers that have never been measured yet.
-# A random jitter in [0.5, 1.5] s is applied so that multiple new providers
-# with no measurements don't all tie at the same value — preventing min()
-# from always picking the first one in the list.
-UNKNOWN_LATENCY_BASE = 1.0   # seconds
-UNKNOWN_LATENCY_JITTER = 0.5  # ± seconds
+# Set it lower than typical observed latency so new providers get a
+# chance to prove themselves before being pushed to the back of the queue.
+UNKNOWN_LATENCY = 1.0   # seconds
 
 
 class SmartBalancer:
@@ -105,13 +101,7 @@ class SmartBalancer:
         # ── 4. Pick the fastest within the group ──────────────────────────────
         def latency_key(p: ProviderConfig) -> float:
             lat = health_tracker.get_latency(p.id)
-            if lat > 0.0:
-                return lat
-            # Jitter prevents min() from always resolving ties in favour of
-            # whichever provider happens to be first in the Redis scan order.
-            return UNKNOWN_LATENCY_BASE + random.uniform(
-                -UNKNOWN_LATENCY_JITTER, UNKNOWN_LATENCY_JITTER
-            )
+            return lat if lat > 0.0 else UNKNOWN_LATENCY
 
         selected = min(top_group, key=latency_key)
 

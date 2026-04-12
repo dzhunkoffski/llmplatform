@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/dzhun/llmplatform/**)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\dzhun\\\\llmplatform\\\\README.md\")"
+    ]
+  }
+}
